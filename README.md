@@ -31,7 +31,74 @@ This separation means the orchestration engine is provably generic (you could
 point it at a different codebase/service tomorrow), while the shortener
 itself is a clean, testable, standalone service you could ship on its own.
 
-## 2. Architecture overview
+## 2. File structure
+
+```
+url-shortener-agentic/
+├── pom.xml                          # Standalone Maven project (JDK 17, Gson, JUnit 5)
+├── README.md                        # This file
+├── .github/                         # CI workflow(s) for this module
+├── src/
+│   ├── main/java/com/
+│   │   ├── Main.java                 # Entry point: `scenarios` (default) | `server [port]`
+│   │   ├── agentic/                  # com.hcb.sc.load.agentic — glue layer
+│   │   │   ├── RequirementsAgent.java        # Parses/normalizes requirements, surfaces ambiguities
+│   │   │   ├── RequirementSpec.java          # Value object: normalized requirement + assumptions
+│   │   │   ├── DecompositionAgent.java       # Breaks a requirement into DecomposedTasks
+│   │   │   ├── DecomposedTask.java           # Value object: a single decomposed unit of work
+│   │   │   ├── PipelineBuilder.java          # Wires real UrlShortenerService calls into TaskNodes
+│   │   │   ├── BrownfieldEnhancementTasks.java # Impact analysis + tasks for the brownfield scenario
+│   │   │   └── ScenarioRunner.java           # Drives the 3 required scenarios end-to-end
+│   │   ├── orchestration/            # com.hcb.sc.load.orchestration — generic agentic engine
+│   │   │   ├── Orchestrator.java             # Core engine: rounds, parallelism, retries, rollback
+│   │   │   ├── TaskNode.java                 # Task definition: deps, gates, retries, approval flag
+│   │   │   ├── TaskResult.java                # Outcome of a single task attempt
+│   │   │   ├── TaskStatus.java                # PENDING/RUNNING/SUCCEEDED/FAILED/SKIPPED/ROLLED_BACK
+│   │   │   ├── Stage.java                     # SDLC stage enum (REQUIREMENTS, DESIGN, IMPL, ...)
+│   │   │   ├── ExecutionContext.java          # Shared artifact store + safe-stop signaling
+│   │   │   ├── PolicyGuardrail.java           # Interface for entry-gate policy checks
+│   │   │   ├── DefaultGuardrails.java         # Built-in guardrails (upstream artifact, release gate, ...)
+│   │   │   ├── ApprovalGate.java               # Interface for human approval checkpoints
+│   │   │   ├── ConsoleApprovalGate.java        # Console-based/auto-approve implementation
+│   │   │   ├── AuditLog.java                   # Append-only audit trail of decisions
+│   │   │   ├── DecisionLogEntry.java           # Single audit log record
+│   │   │   └── MetricsCollector.java           # Success rate, retries, rollbacks, MTTR, latency
+│   │   └── shortener/                # com.hcb.sc.load.shortener — the URL shortener product
+│   │       ├── api/
+│   │       │   └── HttpApiServer.java        # JDK HttpServer-based REST API (shorten/redirect/analytics)
+│   │       ├── model/
+│   │       │   ├── ShortUrl.java              # Short URL entity (code, longUrl, createdAt, expiry, clicks)
+│   │       │   └── ClickEvent.java             # Click analytics record (code, timestamp, referrer, UA)
+│   │       ├── ratelimit/
+│   │       │   └── FixedWindowRateLimiter.java # Per-client fixed-window rate limiter
+│   │       ├── repository/
+│   │       │   ├── UrlRepository.java          # Storage interface
+│   │       │   └── InMemoryUrlRepository.java  # Default in-memory implementation
+│   │       └── service/
+│   │           ├── UrlShortenerService.java    # Core business logic (validation, create, resolve, analytics)
+│   │           ├── Base62Encoder.java          # Sequence ID <-> short code encoding
+│   │           ├── NotFoundException.java
+│   │           ├── UrlValidationException.java
+│   │           └── RateLimitExceededException.java
+│   └── test/java/com/
+│       ├── agentic/
+│       │   └── PipelineIntegrationTest.java   # End-to-end greenfield/brownfield pipeline assertions
+│       ├── orchestration/
+│       │   └── OrchestratorTest.java          # Parallelism, retries, rollback, guardrails, approvals
+│       └── shortener/
+│           ├── ratelimit/FixedWindowRateLimiterTest.java
+│           └── service/
+│               ├── Base62EncoderTest.java
+│               └── UrlShortenerServiceTest.java
+└── target/                           # Build output (jar, jar-with-dependencies, classes)
+```
+
+> Note: source package names are `com.hcb.sc.load.*`, but on disk they live
+> directly under `src/main/java/com/` (i.e., the `hcb/sc/load` folders are
+> collapsed) — package declarations in each `.java` file are still fully
+> qualified as `com.hcb.sc.load.<subpackage>`.
+
+## 3. Architecture overview
 
 ```
 ┌───────────────────────────────────────────────────────────────────┐
@@ -92,7 +159,7 @@ itself is a clean, testable, standalone service you could ship on its own.
 | Dynamic re-planning | `Orchestrator.replan(List<TaskNode>)` merges new/updated tasks into the still-running graph |
 | Controlled autonomy | Agents (Requirements/Decomposition/Implementation/Test/Doc "agents", represented as task actions) execute autonomously *within* guardrails; humans gate high-impact release actions |
 
-## 3. The three required scenarios
+## 4. The three required scenarios
 
 Run via `ScenarioRunner` (invoked by `Main scenarios`, the default mode):
 
@@ -115,7 +182,7 @@ Each scenario prints: normalized problem statement, ambiguities, assumptions,
 every task's final status/attempts, reliability metrics, overall
 success/failure, and the last 5 audit log entries.
 
-## 4. Setup instructions
+## 5. Setup instructions
 
 **Prerequisites:** JDK 17+, Maven 3.8+ (no other dependencies — Gson is
 fetched from Maven Central for JSON in the HTTP API; JUnit 5 for tests).
@@ -161,7 +228,7 @@ curl http://localhost:8080/api/urls/<code>/analytics
 java -Dagentic.autoApprove=false -jar target/url-shortener-agentic.jar scenarios
 ```
 
-## 5. Testing approach
+## 6. Testing approach
 
 - **Unit tests** (`src/test/java/.../shortener/...`): `Base62EncoderTest`,
   `UrlShortenerServiceTest` (validation, custom alias, expiry, analytics,
@@ -183,7 +250,7 @@ mvn test
 
 Tests use auto-approve mode so the full suite runs unattended/CI-friendly.
 
-## 6. Performance enhancements
+## 7. Performance enhancements
 
 A review of the hot paths (HTTP request handling, redirect/click recording,
 rate limiting, code encoding) identified and fixed several concurrency
@@ -201,7 +268,7 @@ All changes preserve existing behavior/contracts — verified by re-running the
 full unit/integration/orchestration test suite (`mvn test`) after each change,
 with zero regressions.
 
-## 7. Risks, trade-offs, and validation guardrails
+## 8. Risks, trade-offs, and validation guardrails
 
 | Risk | Mitigation in this prototype |
 |---|---|
@@ -213,7 +280,7 @@ with zero regressions.
 | Human approval could be silently auto-approved in production | `agentic.autoApprove` defaults to `true` only for demo runnability; must default to `false` (and be wired to a real approval system) before production use |
 | Retries could mask a persistently broken dependency | Bounded (`maxRetries`), then rollback + dependents SKIPPED rather than silently succeeding |
 
-## 8. Assumptions and limitations
+## 9. Assumptions and limitations
 
 - Requirement interpretation uses transparent heuristic rules (keyword
   detection), not an actual LLM call — this keeps the demo deterministic and
@@ -230,7 +297,7 @@ with zero regressions.
   automated static-analysis pass over source files, since the target of the
   enhancement is this same demo codebase.
 
-## 9. Final engineering summary
+## 10. Final engineering summary
 
 - **Plan/rationale**: build a small, generic orchestration engine first
   (testable in isolation), then a clean service, then glue them with
