@@ -9,8 +9,7 @@ custom, stateful **orchestration engine**, and produces a real, runnable
 This module lives at `src/main/java/com` and is a **fully independent Maven
 project** (own `pom.xml`) so it can be built and run in isolation from the
 rest of the repository. Note: source files declare packages as
-`com.*`, but no `hcb/sc/load` directories exist on disk — the
-actual folders are `com/agentic`, `com/orchestration`, and `com/shortener`
+`com.*` — the actual folders are `com/agentic`, `com/orchestration`, and `com/shortener`
 (see [File structure](#2-file-structure) below).
 
 ## 1. Why this design
