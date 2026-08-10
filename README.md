@@ -6,9 +6,12 @@ implementation → testing → documentation → release readiness — using a
 custom, stateful **orchestration engine**, and produces a real, runnable
 **URL Shortener service** as the engineering output.
 
-This module lives at `src/main/java/com/hcb/sc/load` and is a **fully
-independent Maven project** (own `pom.xml`) so it can be built and run in
-isolation from the rest of the repository.
+This module lives at `src/main/java/com` and is a **fully independent Maven
+project** (own `pom.xml`) so it can be built and run in isolation from the
+rest of the repository. Note: source files declare packages as
+`com.*`, but no `hcb/sc/load` directories exist on disk — the
+actual folders are `com/agentic`, `com/orchestration`, and `com/shortener`
+(see [File structure](#2-file-structure) below).
 
 ## 1. Why this design
 
@@ -16,13 +19,13 @@ The assignment's core differentiator is **workflow orchestration**, not just
 "an agent that writes code." So this prototype is split into two cooperating
 halves:
 
-1. **`com.hcb.sc.load.orchestration`** — a generic, reusable agentic
+1. **`com.orchestration`** — a generic, reusable agentic
    orchestration engine (dependency graph, gates, retries, rollback,
    approvals, guardrails, metrics, audit log). This is domain-agnostic.
-2. **`com.hcb.sc.load.shortener`** — the actual production-quality URL
+2. **`com.shortener`** — the actual production-quality URL
    shortener (model, repository, service, rate limiter, HTTP API). This is
    plain, framework-light Java with no dependency on the orchestrator.
-3. **`com.hcb.sc.load.agentic`** — the glue: "agents" (Requirements,
+3. **`com.agentic`** — the glue: "agents" (Requirements,
    Decomposition) and a `PipelineBuilder` that wires real
    `UrlShortenerService` calls into orchestrator `TaskNode`s, so the
    orchestration run **exercises real code**, not a simulation.
@@ -41,7 +44,7 @@ url-shortener-agentic/
 ├── src/
 │   ├── main/java/com/
 │   │   ├── Main.java                 # Entry point: `scenarios` (default) | `server [port]`
-│   │   ├── agentic/                  # com.hcb.sc.load.agentic — glue layer
+│   │   ├── agentic/                  # com.agentic — glue layer
 │   │   │   ├── RequirementsAgent.java        # Parses/normalizes requirements, surfaces ambiguities
 │   │   │   ├── RequirementSpec.java          # Value object: normalized requirement + assumptions
 │   │   │   ├── DecompositionAgent.java       # Breaks a requirement into DecomposedTasks
@@ -49,7 +52,7 @@ url-shortener-agentic/
 │   │   │   ├── PipelineBuilder.java          # Wires real UrlShortenerService calls into TaskNodes
 │   │   │   ├── BrownfieldEnhancementTasks.java # Impact analysis + tasks for the brownfield scenario
 │   │   │   └── ScenarioRunner.java           # Drives the 3 required scenarios end-to-end
-│   │   ├── orchestration/            # com.hcb.sc.load.orchestration — generic agentic engine
+│   │   ├── orchestration/            # com.orchestration — generic agentic engine
 │   │   │   ├── Orchestrator.java             # Core engine: rounds, parallelism, retries, rollback
 │   │   │   ├── TaskNode.java                 # Task definition: deps, gates, retries, approval flag
 │   │   │   ├── TaskResult.java                # Outcome of a single task attempt
@@ -63,7 +66,7 @@ url-shortener-agentic/
 │   │   │   ├── AuditLog.java                   # Append-only audit trail of decisions
 │   │   │   ├── DecisionLogEntry.java           # Single audit log record
 │   │   │   └── MetricsCollector.java           # Success rate, retries, rollbacks, MTTR, latency
-│   │   └── shortener/                # com.hcb.sc.load.shortener — the URL shortener product
+│   │   └── shortener/                # com.shortener — the URL shortener product
 │   │       ├── api/
 │   │       │   └── HttpApiServer.java        # JDK HttpServer-based REST API (shorten/redirect/analytics)
 │   │       ├── model/
@@ -93,10 +96,13 @@ url-shortener-agentic/
 └── target/                           # Build output (jar, jar-with-dependencies, classes)
 ```
 
-> Note: source package names are `com.hcb.sc.load.*`, but on disk they live
-> directly under `src/main/java/com/` (i.e., the `hcb/sc/load` folders are
-> collapsed) — package declarations in each `.java` file are still fully
-> qualified as `com.hcb.sc.load.<subpackage>`.
+> Note: `.java` files declare packages as `com.<subpackage>`
+> (e.g., `package com.agentic;`), but there is **no**
+> `hcb/sc/load` directory on disk — the actual on-disk paths are
+> `src/main/java/com/agentic`, `src/main/java/com/orchestration`, and
+> `src/main/java/com/shortener`, directly under `com/`. This is a
+> pre-existing mismatch between the package declarations and the folder
+> layout, not a documentation error.
 
 ## 3. Architecture overview
 
